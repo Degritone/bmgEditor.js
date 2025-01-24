@@ -1,4 +1,42 @@
 {
+  let fixText = function(textbox){
+    for(let t of Array.from(textbox.querySelectorAll("tag"))){
+      if(!t.querySelector("tag"))
+        continue;
+      let ot = t.outerHTML.split("<tag").slice(1).map(l=>l.replaceAll("</tag>",""));
+      t.outerHTML = `<tag${ot.join("</tag><tag")}</tag>`;
+    }
+    for(let t of Array.from(textbox.querySelectorAll("tag"))){
+      if(!t.querySelector("br"))
+        continue;
+      let ot = t.outerHTML.split("<br>");
+      let ti = ot[0].match(/<tag(.+?) control=".+?" system=".+?">/)[1];
+      t.outerHTML = ot.join(`</tag><br><tag${ti} control="-1" system="-1">`);
+    }
+    for(let t of Array.from(textbox.querySelectorAll("tag"))){
+      if(!t.innerHTML.replaceAll("\r","").replaceAll("\n","").replaceAll(" ","")){
+        t.remove();
+        continue;
+      }
+      t.style.cssText = `
+        letter-spacing:${parseInt(t.getAttribute("spacing"))/42*8.796875}px;
+        font-size:${16*parseInt(t.getAttribute("size"))/100}px;
+        line-height${19*parseInt(t.getAttribute("lineHeight"))/42}px;
+        transform:scale(${parseInt(t.getAttribute("width"))/100},${parseInt(t.getAttribute("height"))/100});
+      `;
+    }
+    for(let b of Array.from(textbox.querySelectorAll("br")))
+      if(!b.nextSibling || b.nextSibling.tagName=="BR")
+        b.remove();
+    for(let s of Array.from(textbox.querySelectorAll("span")))
+      if(s.innerHTML=="▼")
+        s.outerHTML = "<pause>▼</pause>";
+    for(let s of Array.from(textbox.querySelectorAll("span")))
+      if(s.children.length)
+        for(let c of Array.from(s.children))
+          s.parentNode.insertBefore(c,s.nextSibling);
+  }
+  
   let Editor = function(parentNode){
     if(this==window)
       throw new Error(`BMG${typeof(BMG)!=typeof(undefined)?".":""}Editor must be constructed with new BMG${typeof(BMG)!=typeof(undefined)?".":""}Editor`);
@@ -86,7 +124,9 @@
     this.editor.appendChild(this.textbox);
     this.textbox.setAttribute("contenteditable",true);
     
-    this.textbox.addEventListener("focusout",()=>{
+    document.addEventListener("pointerdown",()=>{
+      if(!getSelection().rangeCount)
+        return;
       this.range = getSelection().getRangeAt(0);
       setTimeout(()=>this.setControlValues(false),1);
       this.setHighlight();
@@ -97,7 +137,8 @@
       if(this.textbox.highlight)
         this.textbox.highlight.remove();
     });
-    this.textbox.addEventListener("pointerdown",()=>{
+    this.textbox.addEventListener("pointerdown",e=>{
+      e.stopPropagation();
       setTimeout(()=>this.setControlValues(),1);
     });
     this.textbox.addEventListener("keyup",e=>{
@@ -105,6 +146,7 @@
         this.textbox.innerHTML = this.textbox.innerHTML
           .replaceAll(/<\/p><p(.|\r|\n)+?>/g,"<br>")
         ;
+        fixText(this.textbox);
         if(this.original)
           this.original.innerHTML = this.textbox.children[0].innerHTML;
       }
@@ -167,6 +209,7 @@
         this.original.textSpans = null;
         this.original.textObject = null;
       }
+      fixText(this.textbox);
       this.textbox.textSpans = null;
     });
   };
@@ -222,18 +265,7 @@
         n.setAttribute("control",-1);
         n.setAttribute("system",-1);
       }
-      for(let t of Array.from(this.textbox.querySelectorAll("tag"))){
-        if(!t.innerHTML){
-          t.remove();
-          continue;
-        }
-        t.style.cssText = `
-          letter-spacing:${parseInt(t.getAttribute("spacing"))/42*8.796875}px;
-          font-size:${16*parseInt(t.getAttribute("size"))/100}px;
-          line-height${19*parseInt(t.getAttribute("lineHeight"))/42}px;
-          transform:scale(${parseInt(t.getAttribute("width"))/100},${parseInt(t.getAttribute("height"))/100});
-        `;
-      }
+      fixText(this.textbox);
       if(this.original)
         this.original.innerHTML = this.textbox.children[0].innerHTML;
       if(this.textbox.highlight){
@@ -264,32 +296,6 @@
         if(isNew[a])
           t.setAttribute(a,newTag.getAttribute(a));
     }
-    for(let t of Array.from(this.textbox.querySelectorAll("tag"))){
-      if(!t.querySelector("tag"))
-        continue;
-      let ot = t.outerHTML.split("<tag").slice(1).map(l=>l.replaceAll("</tag>",""));
-      let ti = t.outerHTML.match(/<tag(.+?)/)[1];
-      t.outerHTML = `<tag${ti}${ot.join("</tag><tag")}</tag>`;
-    }
-    for(let t of Array.from(this.textbox.querySelectorAll("tag"))){
-      if(!t.querySelector("br"))
-        continue;
-      let ot = t.outerHTML.split("<br>");
-      let ti = ot[0].match(/<tag(.+?) control=".+?" system=".+?">/)[1];
-      t.outerHTML = ot.join(`</tag><br><tag${ti} control="-1" system="-1">`);
-    }
-    for(let t of Array.from(this.textbox.querySelectorAll("tag"))){
-      if(!t.innerHTML){
-        t.remove();
-        continue;
-      }
-      t.style.cssText = `
-        letter-spacing:${parseInt(t.getAttribute("spacing"))/42*8.796875}px;
-        font-size:${16*parseInt(t.getAttribute("size"))/100}px;
-        line-height${19*parseInt(t.getAttribute("lineHeight"))/42}px;
-        transform:scale(${parseInt(t.getAttribute("width"))/100},${parseInt(t.getAttribute("height"))/100});
-      `;
-    }
     newTag = Array.from(this.textbox.querySelectorAll(".nut"));
     this.range.setStart(newTag[0],0);
     this.range.setEnd(newTag.at(-1),newTag.at(-1).children.length);
@@ -297,6 +303,7 @@
       this.textbox.highlight.remove();
       this.setHighlight();
     }
+    fixText(this.textbox);
     if(this.original){
       this.original.innerHTML = this.textbox.children[0].innerHTML;
       this.original.textObject = null;
@@ -304,6 +311,7 @@
   }
   Editor.prototype.insert = function(newNode){
     this.range.insertNode(newNode);
+    fixText(this.textbox);
     if(this.original){
       this.original.innerHTML = this.textbox.children[0].innerHTML;
       this.original.textObject = null;
@@ -348,8 +356,11 @@
       this.range = getSelection().getRangeAt(0);
     if(this.range.startContainer==this.range.endContainer){
       let e = this.range.startContainer;
-      while(!e.getAttribute || e.getAttribute("speed")===null)
+      while(!e.getAttribute || e.getAttribute("speed")===null){
         e = e.parentNode;
+        if(!e)
+          return;
+      }
       this.editor.querySelector("#size").value = parseInt(e.getAttribute("size"));
       let ct = parseInt(e.getAttribute("colorTop"));
       this.editor.querySelector("#colorTop").value = ct;
